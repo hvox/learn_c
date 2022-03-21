@@ -1,0 +1,3 @@
+#!/bin/sh -e
+cc -O1 pointers_comparison.c -o a.out
+./a.out
