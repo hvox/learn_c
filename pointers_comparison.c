@@ -1,8 +1,8 @@
 #include <stdio.h>
-int a, b;
+int var1, var2;
 int main(void) {
-	int *pa = &a, *pb = &b + 1;
-	printf("&a       = %p\n", pa);
-	printf("&b+1     = %p\n", pb);
-	printf("&a==&b+1 = %d\n", pa == pb);
+	int *p = &var1, *q = &var2 + 1;
+	printf("p    = %p\n", p);
+	printf("q    = %p\n", q);
+	printf("p==q = %d\n", p == q);
 }
