@@ -13,7 +13,7 @@ int main() {
 			scanf("%d", p);
 	}
 
-	int *diag_end = *A + n * max_array_size - 1;
-	for (int *p = *A + n - 1; p < diag_end; p += max_array_size - 1)
+	int *Alast = *A + n * max_array_size - 1;
+	for (int *p = *A + n - 1; p < Alast; p += max_array_size - 1)
 		printf("%p -> %d\n", p, *p);
 }
