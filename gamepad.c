@@ -40,29 +40,73 @@ int create_gamepad() {
 	return gamepad;
 }
 
+void send_event(int fd, int TYPE, int CODE, int VALUE) {
+	struct input_event event = {.type=TYPE, .code=CODE, .value=VALUE};
+	if(write(fd, &event, sizeof(struct input_event)) < 0)
+		printf("Failed to send event %d:%d\n", event.code, event.value);
+}
+
+void flush_events(int fd) {
+	struct input_event event = {.type=EV_SYN};
+	if(write(fd, &event, sizeof(struct input_event)) < 0)
+		printf("Failed to flush events\n");
+}
+
+int connect_to_keyboard(char *keyboard_path) {
+	int keyboard = open(keyboard_path, O_RDONLY);
+	if (keyboard == -1) return -1;
+	if (ioctl(keyboard, EVIOCGRAB, 1) < 0)
+		printf("Failed to block other programs from reading keyboard events");
+	return keyboard;
+}
+
 int main(int argc, char *argv[]) {
+	char *keyboard = "/dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd";
+	int keyboard_fd = connect_to_keyboard(keyboard);
+	if (keyboard_fd < 0) printf("Failed to connect to keyboard\n");
 	int gamepad_fd = create_gamepad();
-	if (gamepad_fd < 0) {
-		printf("Failed to create gamepad\n");
-		return 42;
+	if (gamepad_fd < 0) printf("Failed to create gamepad\n");
+	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
+
+	struct input_event event;
+	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
+		//   press the DELETE key to turn off xbox 360 controller emulation   //
+		if (event.type != EV_KEY) continue;
+		if (event.code == KEY_DELETE && event.value == 1) break;
+		// left joystick
+		if (event.code == KEY_E) send_event(gamepad_fd, EV_KEY, BTN_THUMBL, event.value);
+		if (event.code == KEY_W) send_event(gamepad_fd, EV_ABS, ABS_Y, event.value ? -32768 : 0);
+		if (event.code == KEY_A) send_event(gamepad_fd, EV_ABS, ABS_X, event.value ? -32768 : 0);
+		if (event.code == KEY_S) send_event(gamepad_fd, EV_ABS, ABS_Y, event.value ? 32767 : 0);
+		if (event.code == KEY_D) send_event(gamepad_fd, EV_ABS, ABS_X, event.value ? 32767 : 0);
+		// right joystick
+		if (event.code == KEY_U) send_event(gamepad_fd, EV_KEY, BTN_THUMBR, event.value);
+		if (event.code == KEY_I) send_event(gamepad_fd, EV_ABS, ABS_RY, event.value ? -32768 : 0);
+		if (event.code == KEY_J) send_event(gamepad_fd, EV_ABS, ABS_RX, event.value ? -32768 : 0);
+		if (event.code == KEY_K) send_event(gamepad_fd, EV_ABS, ABS_RY, event.value ? 32767 : 0);
+		if (event.code == KEY_L) send_event(gamepad_fd, EV_ABS, ABS_RX, event.value ? 32767 : 0);
+		// XYAB
+		if (event.code == KEY_ENTER && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_A, event.value);
+		if (event.code == KEY_SPACE && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_A, event.value);
+		if (event.code == KEY_LEFTSHIFT && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_B, event.value);
+		if (event.code == KEY_SEMICOLON && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_X, event.value);
+		if (event.code == KEY_APOSTROPHE && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_Y, event.value);
+		// Bumpers and triggers
+		if (event.code == KEY_Q && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_TL, event.value);
+		if (event.code == KEY_CAPSLOCK && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_Z, event.value*255);
+		if (event.code == KEY_O && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_TR, event.value);
+		if (event.code == KEY_P && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_RZ, event.value*255);
+		// Buttons with terrible names
+		if (event.code == KEY_TAB && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_SELECT, event.value);
+		if (event.code == KEY_ESC && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_START, event.value);
+		// D-pad
+		if (event.code == KEY_UP && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0Y, -event.value);
+		if (event.code == KEY_LEFT && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0X, -event.value);
+		if (event.code == KEY_DOWN && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0Y, event.value);
+		if (event.code == KEY_RIGHT && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0X, event.value);
+		flush_events(gamepad_fd);
 	}
-
-	struct input_event event = {.type=EV_KEY, .code=BTN_A};
-	struct input_event sync_event = {.type=EV_SYN};
-	printf("press ENTER on a keyboard to press/release A on the gamepad\n");
-	while (1) {
-		char buffer[81] = "";
-
-		if (!fgets(buffer, 80, stdin)) break;
-		event.value = 1;
-		write(gamepad_fd, &event, sizeof(event));
-		write(gamepad_fd, &sync_event, sizeof(sync_event));
-
-		if (!fgets(buffer, 80, stdin)) break;
-		event.value = 0;
-		write(gamepad_fd, &event, sizeof(event));
-		write(gamepad_fd, &sync_event, sizeof(sync_event));
-	}
+	close(keyboard_fd);
 	close(gamepad_fd);
 	return 0;
 }
