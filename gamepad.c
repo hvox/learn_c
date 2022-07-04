@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
+char *USAGE_MESSAGE = "usage: %s <keyboard event file>\n\n"
+ "examples:\n  %s /dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd\n";
+
 void set_axis_parameters(struct uinput_user_dev *uidev,
 		int x_axis, int y_axis, int min, int max, int fuzz, int flat) {
 	int axes[2] = {x_axis, y_axis};
@@ -61,12 +64,17 @@ int connect_to_keyboard(char *keyboard_path) {
 }
 
 int main(int argc, char *argv[]) {
-	char *keyboard = "/dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd";
-	int keyboard_fd = connect_to_keyboard(keyboard);
+	if (argc != 2 || argv[1][0] != '/') {
+		printf(USAGE_MESSAGE, argv[0], argv[0]);
+		return 42;
+	}
+	int keyboard_fd = connect_to_keyboard(argv[1]);
 	if (keyboard_fd < 0) printf("Failed to connect to keyboard\n");
 	int gamepad_fd = create_gamepad();
 	if (gamepad_fd < 0) printf("Failed to create gamepad\n");
 	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
+	printf("The keyboard has been successfully turned into a joystick.\n"
+	       "If you want to turn it back, press DELETE on it.\n");
 
 	struct input_event event;
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
