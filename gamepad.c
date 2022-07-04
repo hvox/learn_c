@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <linux/uinput.h>
 #include <stdio.h>
@@ -45,13 +46,13 @@ int create_gamepad() {
 
 void send_event(int fd, int TYPE, int CODE, int VALUE) {
 	struct input_event event = {.type=TYPE, .code=CODE, .value=VALUE};
-	if(write(fd, &event, sizeof(struct input_event)) < 0)
+	if (write(fd, &event, sizeof(struct input_event)) < 0)
 		printf("Failed to send event %d:%d\n", event.code, event.value);
 }
 
 void flush_events(int fd) {
 	struct input_event event = {.type=EV_SYN};
-	if(write(fd, &event, sizeof(struct input_event)) < 0)
+	if (write(fd, &event, sizeof(struct input_event)) < 0)
 		printf("Failed to flush events\n");
 }
 
@@ -69,7 +70,12 @@ int main(int argc, char *argv[]) {
 		return 42;
 	}
 	int keyboard_fd = connect_to_keyboard(argv[1]);
-	if (keyboard_fd < 0) printf("Failed to connect to keyboard\n");
+	if (keyboard_fd < 0) {
+		perror("Failed to connect to the keyboard");
+		if (errno == 13)
+			printf("Have you tried something like this:\n"
+			       "  sudo %s %s\n", argv[0], argv[1]);
+	}
 	int gamepad_fd = create_gamepad();
 	if (gamepad_fd < 0) printf("Failed to create gamepad\n");
 	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
