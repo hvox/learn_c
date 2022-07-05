@@ -9,39 +9,49 @@ char *USAGE_MESSAGE =
   "usage: %s <keyboard event file>\n\n"
   "examples:\n  %s /dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd\n";
 
-struct action {
-	char *name;
-	int target_button;
-	int pressure_level;
+enum gamepad_controls {
+	// 6 directional controls
+	LEFT_STICK_X, LEFT_STICK_Y, LEFT_TRIGGER,
+	RIGHT_STICK_X, RIGHT_STICK_Y, RIGHT_TRIGGER,
+	DIRECTIONAL_PAD_X, DIRECTIONAL_PAD_Y,
+	// 13 pushable controls
+	BUTTON_A, BUTTON_B, BUTTON_X, BUTTON_Y,
+	LEFT_BUMPER, RIGHT_BUMPER,
+	BUTTON_START, BUTTON_BACK, BUTTON_X360,
+	LEFT_STICK, RIGHT_STICK
+};
+short GAMEPAD_CONTROL_CODES[19] = {
+	ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ, ABS_HAT0X, ABS_HAT0Y,
+	BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL, BTN_TR,
+	BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR
 };
 
+struct action {
+	char *name;
+	int control;
+	int direction;
+};
 struct action ACTIONS[26] = {
-	{"do absolutely nothing", 0, 0},
-	{"joystick into keyboard", 0, 0},
-	{"left stick", BTN_THUMBL, 0},
-	{"left stick up", ABS_Y, -128},
-	{"left stick left", ABS_X, -128},
-	{"left stick down", ABS_Y, 127},
-	{"left stick right", ABS_X, 127},
-	{"right stick", BTN_THUMBR, 0},
-	{"right stick up", ABS_RY, -128},
-	{"right stick left", ABS_RX, -128},
-	{"right stick down", ABS_RY, 127},
-	{"right stick right", ABS_RX, 127},
-	{"x", BTN_X, 0},
-	{"y", BTN_Y, 0},
-	{"a", BTN_A, 0},
-	{"b", BTN_B, 0},
-	{"left bumper", BTN_TL, 0},
-	{"left trigger", ABS_Z, 127},
-	{"right bumper", BTN_TR, 0},
-	{"right trigger", ABS_RZ, 127},
-	{"back button", BTN_START, 0},
-	{"start button", BTN_SELECT, 0},
-	{"d-pad up", ABS_HAT0Y, -128},
-	{"d-pad left", ABS_HAT0X, -128},
-	{"d-pad down", ABS_HAT0Y, 127},
-	{"d-pad right", ABS_HAT0X, 127},
+	{"do absolutely nothing"},
+	{"joystick into keyboard"},
+	{"left stick", LEFT_STICK},
+	{"left stick up", LEFT_STICK_Y, -128},
+	{"left stick left", LEFT_STICK_X, -128},
+	{"left stick down", LEFT_STICK_Y, 127},
+	{"left stick right", LEFT_STICK_X, 127},
+	{"left trigger", LEFT_TRIGGER, 127}, {"left bumper", LEFT_BUMPER},
+	{"right stick", RIGHT_STICK},
+	{"right stick up", RIGHT_STICK_Y, -128},
+	{"right stick left", RIGHT_STICK_X, -128},
+	{"right stick down", RIGHT_STICK_Y, 127},
+	{"right stick right", RIGHT_STICK_X, 127},
+	{"right trigger", RIGHT_TRIGGER, 127}, {"right bumper", RIGHT_BUMPER},
+	{"d-pad up", DIRECTIONAL_PAD_Y, -128},
+	{"d-pad left", DIRECTIONAL_PAD_X, -128},
+	{"d-pad down", DIRECTIONAL_PAD_Y, 127},
+	{"d-pad right", DIRECTIONAL_PAD_X, 127},
+	{"back button", BUTTON_BACK}, {"start button", BUTTON_START},
+	{"x", BUTTON_X}, {"y", BUTTON_Y}, {"a", BUTTON_A}, {"b", BUTTON_B},
 };
 
 char *KEY_NAMES[129] = {
@@ -221,12 +231,10 @@ int main(int argc, char *argv[]) {
 		if (key_bindings[event.code] == 1) break;
 		struct action action = ACTIONS[key_bindings[event.code]];
 		printf("performed action: %s\n", action.name);
-		if (action.pressure_level == 0) {
-			send_event(gamepad_fd, EV_KEY, action.target_button, event.value);
-		} else {
-			int pressure = event.value ? action.pressure_level : 0;
-			send_event(gamepad_fd, EV_ABS, action.target_button, pressure);
-		}
+		int control = GAMEPAD_CONTROL_CODES[action.control];
+		int direction = action.direction ? action.direction : 1;
+		int type = control > 128 ? EV_KEY : EV_ABS;
+		send_event(gamepad_fd, type, control, event.value ? direction : 0);
 	}
 	close(keyboard_fd);
 	close(gamepad_fd);
