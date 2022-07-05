@@ -2,13 +2,146 @@
 #include <fcntl.h>
 #include <linux/uinput.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
-char *USAGE_MESSAGE = "usage: %s <keyboard event file>\n\n"
- "examples:\n  %s /dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd\n";
+char *USAGE_MESSAGE =
+  "usage: %s <keyboard event file>\n\n"
+  "examples:\n  %s /dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd\n";
+
+struct action {
+	char *name;
+	int target_button;
+	int pressure_level;
+};
+
+struct action ACTIONS[26] = {
+	{"do absolutely nothing", 0, 0},
+	{"joystick into keyboard", 0, 0},
+	{"left stick", BTN_THUMBL, 0},
+	{"left stick up", ABS_Y, -32768},
+	{"left stick left", ABS_X, -32768},
+	{"left stick down", ABS_Y, 32767},
+	{"left stick right", ABS_X, 32767},
+	{"right stick", BTN_THUMBR, 0},
+	{"right stick up", ABS_RY, -32768},
+	{"right stick left", ABS_RX, -32768},
+	{"right stick down", ABS_RY, 32767},
+	{"right stick right", ABS_RX, 32767},
+	{"x", BTN_X, 0},
+	{"y", BTN_Y, 0},
+	{"a", BTN_A, 0},
+	{"b", BTN_B, 0},
+	{"left bumper", BTN_TL, 0},
+	{"left trigger", ABS_Z, 255},
+	{"right bumper", BTN_TR, 0},
+	{"right trigger", ABS_RZ, 255},
+	{"back button", BTN_START, 0},
+	{"start button", BTN_SELECT, 0},
+	{"d-pad up", ABS_HAT0Y, -1},
+	{"d-pad left", ABS_HAT0X, -1},
+	{"d-pad down", ABS_HAT0Y, 1},
+	{"d-pad right", ABS_HAT0X, 1},
+};
+
+char *KEY_NAMES[129] = {
+  "this_button_does_not_have_a_name_yet", "esc", "1", "2", "3", "4", "5", "6",
+  "7", "8", "9", "0", "minus", "equal", "backspace", "tab", "q", "w", "e", "r",
+  "t", "y", "u", "i", "o", "p", "leftbrace", "rightbrace", "enter", "leftctrl",
+  "a", "s", "d", "f", "g", "h", "j", "k", "l", "semicolon", "apostrophe",
+  "grave", "leftshift", "backslash", "z", "x", "c", "v", "b", "n", "m", "comma",
+  "dot", "slash", "rightshift", "kpasterisk", "leftalt", "space", "capslock",
+  "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "numlock",
+  "scrolllock", "kp7", "kp8", "kp9", "kpminus", "kp4", "kp5", "kp6", "kpplus",
+  "kp1", "kp2", "kp3", "kp0", "kpdot", "qfuy", "zenkakuhankaku", "102nd", "f11",
+  "f12", "ro", "katakana", "hiragana", "henkan", "katakanahiragana", "muhenkan",
+  "kpjpcomma", "kpenter", "rightctrl", "kpslash", "sysrq", "rightalt",
+  "linefeed", "home", "up", "pageup", "left", "right", "end", "down",
+  "pagedown", "insert", "delete", "macro", "mute", "volumedown", "volumeup",
+  "power", "kpequal", "kpplusminus", "pause", "scale", "kpcomma", "hanguel",
+  "hanja", "yen", "leftmeta", "rightmeta", "compose", NULL
+};
+char *CONJUNCTIONS[] = {
+  "to", "press", "move", "punch", "rotate", "turn", "the", "button", NULL
+};
+char *KEY_PREPOSITIONS[] = {
+  "key", "button", "the", NULL
+};
+
+int scan_word(FILE *source, char *word) {
+	if (fscanf(source, "%64s", word) != 1) return 0;
+	for (char *ch = word; *ch != 0; ch++)
+		*ch += (*ch > 64 && *ch < 91) ? 32 : 0;
+	if (word[0] != '#') return 1;
+	while (fscanf(source, "%64[^\n]s", word) == 1);
+	return scan_word(source, word);
+}
+
+int find(char **haystack, char *needle) {
+	int i = 0;
+	while (haystack[i] != NULL && strcmp(haystack[i], needle)) i++;
+	return haystack[i] != NULL ? i : -1;
+}
+
+int skip_words(FILE *source, char *word, char **skips) {
+	do {
+		if (!scan_word(source, word)) return 0;
+	} while (find(skips, word) != -1);
+	return 1;
+}
+
+
+int read_keys(char map[128], char *config_path) {
+	FILE *config = fopen(config_path, "r");
+	if (config == NULL) {
+		perror("Failed to read keybindings from config file");
+		return -1;
+	}
+	char word[65] = "";
+	for (int done = !scan_word(config, word); !done;) {
+		if (strcmp(word, "map")) {
+			fprintf(stderr, "Expected \"map\" but got \"%s\"\n", word);
+			fclose(config); return -2;
+		}
+		if (!skip_words(config, word, KEY_PREPOSITIONS)) {
+			fprintf(stderr, "You haven't specified what key to map\n");
+			fclose(config); return -3;
+		}
+		int key = find(KEY_NAMES, word);
+		if (key == -1) {
+			fprintf(stderr, "Invalid key name: %s\n", word);
+			fclose(config); return -4;
+		}
+		if (!skip_words(config, word, CONJUNCTIONS)) {
+			fprintf(stderr, "You haven't specified action to be performed\n");
+			fclose(config); return -5;
+		}
+		char action_name[128] = "";
+		while (strlen(action_name) < 48 && strcmp(word, "map") && !done) {
+			strcat(action_name, word);
+			strcat(action_name, " ");
+			done = scan_word(config, word) != 1;
+		}
+		action_name[strlen(action_name) - 1] = 0;
+		int act = 25;
+		while (act >= 0 && strcmp(ACTIONS[act].name, action_name)) act--;
+		if (act == -1) {
+			fprintf(stderr, "\"%s\" is not a valid action\n", action_name);
+			fclose(config); return -6;
+		}
+		if (map[key]) {
+			fprintf(stderr, "Key \"%s\" is already mapped to \"%s\"\n",
+				KEY_NAMES[key], ACTIONS[map[key]].name);
+			fclose(config); return -7;
+		}
+		map[key] = act;
+	}
+	fclose(config);
+	return 0;
+}
 
 void set_axis_parameters(struct uinput_user_dev *uidev,
-		int x_axis, int y_axis, int min, int max, int fuzz, int flat) {
+  int x_axis, int y_axis, int min, int max, int fuzz, int flat) {
 	int axes[2] = {x_axis, y_axis};
 	for (int i = 0; i < 2; i++) {
 		uidev->absmin[axes[i]] = min;
@@ -46,14 +179,10 @@ int create_gamepad() {
 
 void send_event(int fd, int TYPE, int CODE, int VALUE) {
 	struct input_event event = {.type=TYPE, .code=CODE, .value=VALUE};
-	if (write(fd, &event, sizeof(struct input_event)) < 0)
+	struct input_event flush = {.type=EV_SYN};
+	if (write(fd, &event, sizeof(event)) < 0
+		  || (write(fd, &flush, sizeof(flush)) < 0))
 		printf("Failed to send event %d:%d\n", event.code, event.value);
-}
-
-void flush_events(int fd) {
-	struct input_event event = {.type=EV_SYN};
-	if (write(fd, &event, sizeof(struct input_event)) < 0)
-		printf("Failed to flush events\n");
 }
 
 int connect_to_keyboard(char *keyboard_path) {
@@ -69,6 +198,8 @@ int main(int argc, char *argv[]) {
 		printf(USAGE_MESSAGE, argv[0], argv[0]);
 		return 42;
 	}
+	char key_bindings[128] = "";
+	if (read_keys(key_bindings, "./keys.keys") < 0) return 42;
 	int keyboard_fd = connect_to_keyboard(argv[1]);
 	if (keyboard_fd < 0) {
 		perror("Failed to connect to the keyboard");
@@ -81,44 +212,21 @@ int main(int argc, char *argv[]) {
 	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
 	printf("The keyboard has been successfully turned into a joystick.\n"
 	       "If you want to turn it back, press DELETE on it.\n");
-
 	struct input_event event;
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
-		//   press the DELETE key to turn off xbox 360 controller emulation   //
-		if (event.type != EV_KEY) continue;
+		if (event.type != EV_KEY || event.code > 127) continue;
 		if (event.code == KEY_DELETE && event.value == 1) break;
-		// left joystick
-		if (event.code == KEY_E) send_event(gamepad_fd, EV_KEY, BTN_THUMBL, event.value);
-		if (event.code == KEY_W) send_event(gamepad_fd, EV_ABS, ABS_Y, event.value ? -32768 : 0);
-		if (event.code == KEY_A) send_event(gamepad_fd, EV_ABS, ABS_X, event.value ? -32768 : 0);
-		if (event.code == KEY_S) send_event(gamepad_fd, EV_ABS, ABS_Y, event.value ? 32767 : 0);
-		if (event.code == KEY_D) send_event(gamepad_fd, EV_ABS, ABS_X, event.value ? 32767 : 0);
-		// right joystick
-		if (event.code == KEY_U) send_event(gamepad_fd, EV_KEY, BTN_THUMBR, event.value);
-		if (event.code == KEY_I) send_event(gamepad_fd, EV_ABS, ABS_RY, event.value ? -32768 : 0);
-		if (event.code == KEY_J) send_event(gamepad_fd, EV_ABS, ABS_RX, event.value ? -32768 : 0);
-		if (event.code == KEY_K) send_event(gamepad_fd, EV_ABS, ABS_RY, event.value ? 32767 : 0);
-		if (event.code == KEY_L) send_event(gamepad_fd, EV_ABS, ABS_RX, event.value ? 32767 : 0);
-		// XYAB
-		if (event.code == KEY_ENTER && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_A, event.value);
-		if (event.code == KEY_SPACE && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_A, event.value);
-		if (event.code == KEY_LEFTSHIFT && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_B, event.value);
-		if (event.code == KEY_SEMICOLON && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_X, event.value);
-		if (event.code == KEY_APOSTROPHE && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_Y, event.value);
-		// Bumpers and triggers
-		if (event.code == KEY_Q && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_TL, event.value);
-		if (event.code == KEY_CAPSLOCK && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_Z, event.value*255);
-		if (event.code == KEY_O && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_TR, event.value);
-		if (event.code == KEY_P && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_RZ, event.value*255);
-		// Buttons with terrible names
-		if (event.code == KEY_TAB && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_SELECT, event.value);
-		if (event.code == KEY_ESC && event.value != 2) send_event(gamepad_fd, EV_KEY, BTN_START, event.value);
-		// D-pad
-		if (event.code == KEY_UP && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0Y, -event.value);
-		if (event.code == KEY_LEFT && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0X, -event.value);
-		if (event.code == KEY_DOWN && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0Y, event.value);
-		if (event.code == KEY_RIGHT && event.value != 2) send_event(gamepad_fd, EV_ABS, ABS_HAT0X, event.value);
-		flush_events(gamepad_fd);
+		printf("pressure=%d key=%s\n", event.value, KEY_NAMES[event.code]);
+		if (key_bindings[event.code] == 0) continue;
+		if (key_bindings[event.code] == 1) break;
+		struct action action = ACTIONS[key_bindings[event.code]];
+		printf("performed action: %s\n", action.name);
+		if (action.pressure_level == 0) {
+			send_event(gamepad_fd, EV_KEY, action.target_button, event.value);
+		} else {
+			int pressure = event.value ? action.pressure_level : 0;
+			send_event(gamepad_fd, EV_ABS, action.target_button, pressure);
+		}
 	}
 	close(keyboard_fd);
 	close(gamepad_fd);
