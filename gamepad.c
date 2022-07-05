@@ -34,24 +34,25 @@ struct action {
 struct action ACTIONS[26] = {
 	{"do absolutely nothing"},
 	{"joystick into keyboard"},
-	{"left stick", LEFT_STICK},
+	{"left stick", LEFT_STICK, 1},
 	{"left stick up", LEFT_STICK_Y, -128},
 	{"left stick left", LEFT_STICK_X, -128},
 	{"left stick down", LEFT_STICK_Y, 127},
 	{"left stick right", LEFT_STICK_X, 127},
-	{"left trigger", LEFT_TRIGGER, 127}, {"left bumper", LEFT_BUMPER},
-	{"right stick", RIGHT_STICK},
+	{"left trigger", LEFT_TRIGGER, 127}, {"left bumper", LEFT_BUMPER, 1},
+	{"right stick", RIGHT_STICK, 1},
 	{"right stick up", RIGHT_STICK_Y, -128},
 	{"right stick left", RIGHT_STICK_X, -128},
 	{"right stick down", RIGHT_STICK_Y, 127},
 	{"right stick right", RIGHT_STICK_X, 127},
-	{"right trigger", RIGHT_TRIGGER, 127}, {"right bumper", RIGHT_BUMPER},
+	{"right trigger", RIGHT_TRIGGER, 127}, {"right bumper", RIGHT_BUMPER, 1},
 	{"d-pad up", DIRECTIONAL_PAD_Y, -128},
 	{"d-pad left", DIRECTIONAL_PAD_X, -128},
 	{"d-pad down", DIRECTIONAL_PAD_Y, 127},
 	{"d-pad right", DIRECTIONAL_PAD_X, 127},
-	{"back button", BUTTON_BACK}, {"start button", BUTTON_START},
-	{"x", BUTTON_X}, {"y", BUTTON_Y}, {"a", BUTTON_A}, {"b", BUTTON_B},
+	{"back button", BUTTON_BACK, 1}, {"start button", BUTTON_START, 1},
+	{"x", BUTTON_X, 1}, {"y", BUTTON_Y, 1},
+	{"a", BUTTON_A, 1}, {"b", BUTTON_B, 1},
 };
 
 char *KEY_NAMES[129] = {
@@ -177,9 +178,9 @@ int create_gamepad() {
 
 	int gamepad = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
 	if (gamepad < 0) return -1;
+	ioctl(gamepad, UI_SET_EVBIT, EV_ABS);
 	ioctl(gamepad, UI_SET_EVBIT, EV_KEY);
 	ioctl(gamepad, UI_SET_EVBIT, EV_SYN);
-	ioctl(gamepad, UI_SET_EVBIT, EV_ABS);
 	for (int i = 0; i < btns_sz; i++) ioctl(gamepad, UI_SET_KEYBIT, btns[i]);
 	for (int i = 0; i < axes_sz; i++) ioctl(gamepad, UI_SET_ABSBIT, axes[i]);
 	if (write(gamepad, &uidev, sizeof(uidev)) < 0) return -2;
@@ -187,8 +188,16 @@ int create_gamepad() {
 	return gamepad;
 }
 
-void send_event(int fd, int TYPE, int CODE, int VALUE) {
-	struct input_event event = {.type=TYPE, .code=CODE, .value=VALUE};
+void sync_control(int fd, int control, int value) {
+	int type, code = GAMEPAD_CONTROL_CODES[control];
+	if (code > 128) {
+		type = EV_KEY;
+		value = value > 0 ? 1 : 0;
+	} else  {
+		type = EV_ABS;
+		value = value > 127 ? 127 : value < -128 ? -128 : value;
+	}
+	struct input_event event = {.type=type, .code=code, .value=value};
 	struct input_event flush = {.type=EV_SYN};
 	if (write(fd, &event, sizeof(event)) < 0
 		  || (write(fd, &flush, sizeof(flush)) < 0))
@@ -224,22 +233,20 @@ int main(int argc, char *argv[]) {
 	       "If you want to turn it back, press DELETE on it.\n");
 	struct input_event event;
 	int balanse = 0;
+	int controls[19] = {0};
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
 		if (event.type != EV_KEY) continue;
 		if (event.code > 127 || event.value == 2) continue;
 		if (event.code == KEY_DELETE && event.value == 1) break;
 		balanse += event.value ? 1 : -1;
-		printf("balance: %d ", balanse);
+		printf("%d ", balanse);
 		printf("pressure=%d key=%s\n", event.value, KEY_NAMES[event.code]);
 		if (key_bindings[event.code] == 0) continue;
 		if (key_bindings[event.code] == 1) break;
 		struct action action = ACTIONS[key_bindings[event.code]];
 		printf("performed action: %s\n", action.name);
-		int control = GAMEPAD_CONTROL_CODES[action.control];
-		int direction = action.direction ? action.direction : 1;
-		int type = control > 128 ? EV_KEY : EV_ABS;
-		int value = event.value ? direction : 0;
-		send_event(gamepad_fd, type, control, event.value ? direction : 0);
+		controls[action.control] += action.direction * (event.value * 2 - 1);
+		sync_control(gamepad_fd, action.control, controls[action.control]);
 	}
 	close(keyboard_fd);
 	close(gamepad_fd);
