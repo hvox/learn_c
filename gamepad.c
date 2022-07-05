@@ -19,29 +19,29 @@ struct action ACTIONS[26] = {
 	{"do absolutely nothing", 0, 0},
 	{"joystick into keyboard", 0, 0},
 	{"left stick", BTN_THUMBL, 0},
-	{"left stick up", ABS_Y, -32768},
-	{"left stick left", ABS_X, -32768},
-	{"left stick down", ABS_Y, 32767},
-	{"left stick right", ABS_X, 32767},
+	{"left stick up", ABS_Y, -128},
+	{"left stick left", ABS_X, -128},
+	{"left stick down", ABS_Y, 127},
+	{"left stick right", ABS_X, 127},
 	{"right stick", BTN_THUMBR, 0},
-	{"right stick up", ABS_RY, -32768},
-	{"right stick left", ABS_RX, -32768},
-	{"right stick down", ABS_RY, 32767},
-	{"right stick right", ABS_RX, 32767},
+	{"right stick up", ABS_RY, -128},
+	{"right stick left", ABS_RX, -128},
+	{"right stick down", ABS_RY, 127},
+	{"right stick right", ABS_RX, 127},
 	{"x", BTN_X, 0},
 	{"y", BTN_Y, 0},
 	{"a", BTN_A, 0},
 	{"b", BTN_B, 0},
 	{"left bumper", BTN_TL, 0},
-	{"left trigger", ABS_Z, 255},
+	{"left trigger", ABS_Z, 127},
 	{"right bumper", BTN_TR, 0},
-	{"right trigger", ABS_RZ, 255},
+	{"right trigger", ABS_RZ, 127},
 	{"back button", BTN_START, 0},
 	{"start button", BTN_SELECT, 0},
-	{"d-pad up", ABS_HAT0Y, -1},
-	{"d-pad left", ABS_HAT0X, -1},
-	{"d-pad down", ABS_HAT0Y, 1},
-	{"d-pad right", ABS_HAT0X, 1},
+	{"d-pad up", ABS_HAT0Y, -128},
+	{"d-pad left", ABS_HAT0X, -128},
+	{"d-pad down", ABS_HAT0Y, 127},
+	{"d-pad right", ABS_HAT0X, 127},
 };
 
 char *KEY_NAMES[129] = {
@@ -160,10 +160,10 @@ int create_gamepad() {
 	int axes_sz = sizeof(axes) / sizeof(int);
 	struct uinput_user_dev uidev = { .name="Xbox 360 Controller", .id={
 		.bustype=BUS_USB, .version=0x0110, .vendor=0x045e, .product=0x028e}};
-	set_axis_parameters(&uidev, ABS_X, ABS_Y, -32768, 32767, 16, 128);
-	set_axis_parameters(&uidev, ABS_RX, ABS_RY, -32768, 32767, 16, 128);
-	set_axis_parameters(&uidev, ABS_HAT0X, ABS_HAT0Y, -1, 1, 0, 0);
-	set_axis_parameters(&uidev, ABS_Z, ABS_RZ, 0, 255, 0, 16);
+	set_axis_parameters(&uidev, ABS_X, ABS_Y, -128, 127, 0, 16);
+	set_axis_parameters(&uidev, ABS_RX, ABS_RY, -128, 127, 0, 16);
+	set_axis_parameters(&uidev, ABS_HAT0X, ABS_HAT0Y, -128, 127, 0, 16);
+	set_axis_parameters(&uidev, ABS_Z, ABS_RZ, 0, 127, 0, 16);
 
 	int gamepad = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
 	if (gamepad < 0) return -1;
