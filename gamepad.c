@@ -223,9 +223,13 @@ int main(int argc, char *argv[]) {
 	printf("The keyboard has been successfully turned into a joystick.\n"
 	       "If you want to turn it back, press DELETE on it.\n");
 	struct input_event event;
+	int balanse = 0;
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
-		if (event.type != EV_KEY || event.code > 127) continue;
+		if (event.type != EV_KEY) continue;
+		if (event.code > 127 || event.value == 2) continue;
 		if (event.code == KEY_DELETE && event.value == 1) break;
+		balanse += event.value ? 1 : -1;
+		printf("balance: %d ", balanse);
 		printf("pressure=%d key=%s\n", event.value, KEY_NAMES[event.code]);
 		if (key_bindings[event.code] == 0) continue;
 		if (key_bindings[event.code] == 1) break;
@@ -234,6 +238,7 @@ int main(int argc, char *argv[]) {
 		int control = GAMEPAD_CONTROL_CODES[action.control];
 		int direction = action.direction ? action.direction : 1;
 		int type = control > 128 ? EV_KEY : EV_ABS;
+		int value = event.value ? direction : 0;
 		send_event(gamepad_fd, type, control, event.value ? direction : 0);
 	}
 	close(keyboard_fd);
