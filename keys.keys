@@ -1,0 +1,40 @@
+map DELETE to turn joystick into keyboard
+
+# left stick
+map E to press left stick
+map W to move left stick up
+map A to move left stick left
+map S to move left stick down
+map D to move left stick right
+
+# right stick
+map H to press right stick
+map J to move right stick up
+map N to move right stick left
+map M to move right stick down
+map comma to move right stick right
+
+# XYAB buttons
+map K to button X
+map O to button Y
+map L to press button A
+map SEMICOLON to press button B
+
+# Directional pad
+map F to D-pad UP
+map C to D-pad LEFT
+map V to D-pad DOWN
+map B to D-pad RIGHT
+
+# bumpers and triggers
+map Q to left bumper
+map P to right bumper
+map CAPSLOCK to left trigger
+map LEFTBRACE to right trigger
+
+# special buttons
+map TAB to press the start button
+map ESC to press the back button
+map SPACE to press button A
+map ENTER to press button A
+map LEFTSHIFT to press button B
