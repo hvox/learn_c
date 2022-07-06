@@ -27,10 +27,10 @@ map V to D-pad DOWN
 map B to D-pad RIGHT
 
 # bumpers and triggers
-map Q to left bumper
-map P to right bumper
-map CAPSLOCK to left trigger
-map LEFTBRACE to right trigger
+map CAPSLOCK to left bumper
+map LEFTBRACE to right bumper
+map Q to left trigger
+map P to right trigger
 
 # special buttons
 map TAB to press the start button
