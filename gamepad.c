@@ -230,14 +230,15 @@ int main(int argc, char *argv[]) {
 	if (gamepad_fd < 0) printf("Failed to create gamepad\n");
 	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
 	printf("The keyboard has been successfully turned into a joystick.\n"
-	       "If you want to turn it back, press DELETE on it.\n");
+	       "If you want to temporary turn it back, press DELETE on it.\n");
 	struct input_event event;
-	int balanse = 0;
+	int balanse = 0, enabled = 1;
 	int controls[19] = {0};
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
 		if (event.type != EV_KEY) continue;
 		if (event.code > 127 || event.value == 2) continue;
-		if (event.code == KEY_DELETE && event.value == 1) break;
+		if (event.code == KEY_DELETE && event.value == 0)
+			ioctl(keyboard_fd, EVIOCGRAB, enabled = !enabled);
 		balanse += event.value ? 1 : -1;
 		printf("%d ", balanse);
 		printf("pressure=%d key=%s\n", event.value, KEY_NAMES[event.code]);
@@ -246,7 +247,8 @@ int main(int argc, char *argv[]) {
 		struct action action = ACTIONS[key_bindings[event.code]];
 		printf("performed action: %s\n", action.name);
 		controls[action.control] += action.direction * (event.value * 2 - 1);
-		sync_control(gamepad_fd, action.control, controls[action.control]);
+		if (enabled)
+			sync_control(gamepad_fd, action.control, controls[action.control]);
 	}
 	close(keyboard_fd);
 	close(gamepad_fd);
