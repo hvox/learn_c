@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 char *USAGE_MESSAGE =
-  "usage: %s <keyboard event file>\n\n"
+  "usage: %s <periphery event file>\n\n"
   "examples:\n  %s /dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd\n";
 
 char *KEY_NAMES[701] = {
@@ -124,12 +124,12 @@ char *AXES_NAMES[62] = {
   "mt_tool_y",
 };
 
-int connect_to_keyboard(char *keyboard_path) {
-	int keyboard = open(keyboard_path, O_RDONLY);
-	if (keyboard == -1) return -1;
-	if (ioctl(keyboard, EVIOCGRAB, 1) < 0)
-		printf("Failed to block other programs from reading keyboard events");
-	return keyboard;
+int connect_to_periphery(char *periphery_path) {
+	int periphery = open(periphery_path, O_RDONLY);
+	if (periphery == -1) return -1;
+	if (ioctl(periphery, EVIOCGRAB, 1) < 0)
+		printf("Failed to block other programs from reading periphery events");
+	return periphery;
 }
 
 void print_event(struct input_event event) {
@@ -152,9 +152,9 @@ int main(int argc, char *argv[]) {
 		printf(USAGE_MESSAGE, argv[0], argv[0]);
 		return 42;
 	}
-	int keyboard_fd = connect_to_keyboard(argv[1]);
-	if (keyboard_fd < 0) {
-		perror("Failed to connect to the keyboard");
+	int periphery_fd = connect_to_periphery(argv[1]);
+	if (periphery_fd < 0) {
+		perror("Failed to connect to the periphery");
 		if (errno == 13)
 			printf("Have you tried something like this:\n"
 			       "  sudo %s %s\n", argv[0], argv[1]);
@@ -163,12 +163,12 @@ int main(int argc, char *argv[]) {
 	printf("Press DELETE to temporary stop.\n");
 	int enabled = 1;
 	struct input_event event;
-	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
+	while (read(periphery_fd, &event, sizeof(event)) != -1) {
 		if (event.type == EV_SYN) continue;
 		if (event.code == KEY_DELETE && event.value == 0)
-			ioctl(keyboard_fd, EVIOCGRAB, enabled = !enabled);
+			ioctl(periphery_fd, EVIOCGRAB, enabled = !enabled);
 		print_event(event);
 	}
-	close(keyboard_fd);
+	close(periphery_fd);
 	return 0;
 }
