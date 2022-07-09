@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "controls.h"
+#include "dynamic_array.h"
 
 char *USAGE_MESSAGE =
   "usage: %s <keyboard event file>\n\n"
@@ -203,35 +204,9 @@ int connect_to_keyboard(char *keyboard_path) {
 	return keyboard;
 }
 
-void *object(void *content, uint16_t size) {
-	void *object = malloc(size + 2);
-	*((uint16_t *) object) = size;
-	return memcpy(object + 2, content, size);
-}
-
-void delete(void *object) {
-	free(object - 2);
-}
-
-uint16_t object_size(void *object) {
-	return *((uint16_t *) (object - 2));
-}
-
 struct control *get_supported_controls(int periphery) {
-	int controls_count = 0;
-	struct control controls[256] = {};
+	struct control *controls = new_array_of_type(struct control);
 
-	unsigned char supported_buttons[(KEY_MAX + 7) / 8] = {};
-	ioctl(periphery, EVIOCGBIT(EV_KEY, KEY_MAX), supported_buttons);
-	for (int key = 0; key < 701; key++) {
-		if ((supported_buttons[key / 8] >> (key % 8)) & 1) {
-			struct control cntrl = {
-				.code = 61 + key, .value = 0,
-				.min_value = 0, .max_value = 1
-			};
-			controls[controls_count++] = cntrl;
-		}
-	}
 	unsigned char supported_axes[(ABS_MAX + 7) / 8] = {};
 	ioctl(periphery, EVIOCGBIT(EV_ABS, ABS_MAX), supported_axes);
 	for (int axis = 0; axis < 61; axis++)
@@ -242,22 +217,33 @@ struct control *get_supported_controls(int periphery) {
 				.code = axis, .value = axis_info.value,
 				.min_value = axis_info.minimum, .max_value = axis_info.maximum
 			};
-			controls[controls_count++] = cntrl;
+			controls = push(controls, &cntrl);
 		}
-	return object(controls, controls_count * sizeof(struct control));
+	unsigned char supported_buttons[(KEY_MAX + 7) / 8] = {};
+	ioctl(periphery, EVIOCGBIT(EV_KEY, KEY_MAX), supported_buttons);
+	for (int key = 0; key < 701; key++) {
+		if ((supported_buttons[key / 8] >> (key % 8)) & 1) {
+			struct control cntrl = {
+				.code = 61 + key, .value = 0,
+				.min_value = 0, .max_value = 1
+			};
+			controls = push(controls, &cntrl);
+		}
+	}
+	return controls;
 }
 
 int main(int argc, char *argv[]) {
 	struct control gamepad_controls[19] = {
 		new_axis_control(ABS_X, 0, -128, 127), // left stick X
 		new_axis_control(ABS_Y, 0, -128, 127), // left stick Y
-		new_axis_control(ABS_Z, 0, -128, 127), // left trigger
+		new_axis_control(ABS_Z, 0, 0, 127), // left trigger
 		new_axis_control(ABS_RX, 0, -128, 127), // right stick X
 		new_axis_control(ABS_RY, 0, -128, 127), // right stick Y
-		new_axis_control(ABS_RZ, 0, -128, 127), // right trigger
+		new_axis_control(ABS_RZ, 0, 0, 127), // right trigger
 		new_axis_control(ABS_HAT0X, 0, -128, 127), // directional pad X
 		new_axis_control(ABS_HAT0Y, 0, -128, 127), // directional pad Y
-		new_key_control(BTN_SOUTH), // button A
+		new_key_control(BTN_A), // button A
 		new_key_control(BTN_B), // button B
 		new_key_control(BTN_X), // button X
 		new_key_control(BTN_Y), // button Y
@@ -278,7 +264,6 @@ int main(int argc, char *argv[]) {
 	if (read_keys(key_bindings, "./keys.keys") < 0) return 42;
 	int keyboard_fd = connect_to_keyboard(argv[1]);
 	struct control *controls = get_supported_controls(keyboard_fd);
-	int controls_cnt = object_size(controls) / sizeof(struct control);
 	if (keyboard_fd < 0) {
 		perror("Failed to connect to the keyboard");
 		if (errno == 13)
@@ -313,7 +298,7 @@ int main(int argc, char *argv[]) {
 			sync_control(gamepad_fd, action.control,
 					gamepad_controls[action.control].value);
 	}
-	delete(controls);
+	del_array(controls);
 	close(keyboard_fd);
 	close(gamepad_fd);
 	return 0;
