@@ -1,8 +1,9 @@
 #ifndef CONTROLS_H
 #define CONTROLS_H
-
 #include <stddef.h>
 
+
+int KEY_NAMES_CNT = 701;
 char *KEY_NAMES[701] = {
   "this_button_does_not_have_a_name_yet", "esc", "1", "2", "3", "4", "5", "6",
   "7", "8", "9", "0", "minus", "equal", "backspace", "tab", "q", "w", "e", "r",
@@ -106,6 +107,7 @@ char *KEY_NAMES[701] = {
   "kbd_lcd_menu5",
 };
 
+int AXES_CNT = 62;
 char *AXES_NAMES[62] = {
   "x", "y", "z", "rx", "ry", "rz", "throttle", "rudder", "wheel", "gas",
   "brake", NULL, NULL, NULL, NULL, NULL, "hat0x", "hat0y", "hat1x", "hat1y",
@@ -119,7 +121,7 @@ char *AXES_NAMES[62] = {
 };
 
 struct control {
-	int code; /* 0..61 -- axes, others -- buttons */
+	int code; /* 0..AXES_CNT-1 -- axes, others -- buttons */
 	int value;
 	int min_value;
 	int max_value;
@@ -127,11 +129,22 @@ struct control {
 
 enum control_type { CONTROL_KEY = 1, CONTROL_AXIS = 3 };
 enum control_type get_control_type(struct control control) {
-	return control.code > 61 ? CONTROL_KEY : CONTROL_AXIS;
+	return control.code < AXES_CNT ? CONTROL_AXIS : CONTROL_KEY;
 }
 
 int get_control_code(struct control control) {
-	return control.code > 61 ? control.code - 61 : control.code;
+	return control.code < AXES_CNT ? control.code - AXES_CNT : control.code;
+}
+
+struct control new_key_control(int code) {
+	struct control cntrl = {code + AXES_CNT, 0, 0, 1};
+	return cntrl;
+}
+#define NEW_AXIS(code, min, max) {code, 0, min, max}
+
+struct control new_axis_control(int code, int value, int min, int max) {
+	struct control cntrl = {code, value, min, max};
+	return cntrl;
 }
 
 #endif

@@ -1,9 +1,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/uinput.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "controls.h"
 
 char *USAGE_MESSAGE =
   "usage: %s <keyboard event file>\n\n"
@@ -55,23 +58,7 @@ struct action ACTIONS[26] = {
 	{"a", BUTTON_A, 1}, {"b", BUTTON_B, 1},
 };
 
-char *KEY_NAMES[129] = {
-  "this_button_does_not_have_a_name_yet", "esc", "1", "2", "3", "4", "5", "6",
-  "7", "8", "9", "0", "minus", "equal", "backspace", "tab", "q", "w", "e", "r",
-  "t", "y", "u", "i", "o", "p", "leftbrace", "rightbrace", "enter", "leftctrl",
-  "a", "s", "d", "f", "g", "h", "j", "k", "l", "semicolon", "apostrophe",
-  "grave", "leftshift", "backslash", "z", "x", "c", "v", "b", "n", "m", "comma",
-  "dot", "slash", "rightshift", "kpasterisk", "leftalt", "space", "capslock",
-  "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "numlock",
-  "scrolllock", "kp7", "kp8", "kp9", "kpminus", "kp4", "kp5", "kp6", "kpplus",
-  "kp1", "kp2", "kp3", "kp0", "kpdot", "qfuy", "zenkakuhankaku", "102nd", "f11",
-  "f12", "ro", "katakana", "hiragana", "henkan", "katakanahiragana", "muhenkan",
-  "kpjpcomma", "kpenter", "rightctrl", "kpslash", "sysrq", "rightalt",
-  "linefeed", "home", "up", "pageup", "left", "right", "end", "down",
-  "pagedown", "insert", "delete", "macro", "mute", "volumedown", "volumeup",
-  "power", "kpequal", "kpplusminus", "pause", "scale", "kpcomma", "hanguel",
-  "hanja", "yen", "leftmeta", "rightmeta", "compose", NULL
-};
+
 char *CONJUNCTIONS[] = {
   "to", "press", "move", "punch", "rotate", "turn", "the", "button", NULL
 };
@@ -88,19 +75,23 @@ int scan_word(FILE *source, char *word) {
 	return scan_word(source, word);
 }
 
-int find(char **haystack, char *needle) {
+int find(char **haystack, char *needle, int haystack_size) {
 	int i = 0;
-	while (haystack[i] != NULL && strcmp(haystack[i], needle)) i++;
-	return haystack[i] != NULL ? i : -1;
+	while (i != haystack_size && strcmp(haystack[i], needle)) i++;
+	return i != haystack_size ? i : -1;
 }
 
-int skip_words(FILE *source, char *word, char **skips) {
+int skip_words(FILE *source, char *word, char **skips, int skips_cnt) {
+	if (skips_cnt == -1) {
+		skips_cnt = 0;
+		while (skips[skips_cnt] != NULL)
+			skips_cnt++;
+	}
 	do {
 		if (!scan_word(source, word)) return 0;
-	} while (find(skips, word) != -1);
+	} while (find(skips, word, skips_cnt) != -1);
 	return 1;
 }
-
 
 int read_keys(char map[128], char *config_path) {
 	FILE *config = fopen(config_path, "r");
@@ -114,16 +105,16 @@ int read_keys(char map[128], char *config_path) {
 			fprintf(stderr, "Expected \"map\" but got \"%s\"\n", word);
 			fclose(config); return -2;
 		}
-		if (!skip_words(config, word, KEY_PREPOSITIONS)) {
+		if (!skip_words(config, word, KEY_PREPOSITIONS, -1)) {
 			fprintf(stderr, "You haven't specified what key to map\n");
 			fclose(config); return -3;
 		}
-		int key = find(KEY_NAMES, word);
+		int key = find(KEY_NAMES, word, KEY_NAMES_CNT);
 		if (key == -1) {
 			fprintf(stderr, "Invalid key name: %s\n", word);
 			fclose(config); return -4;
 		}
-		if (!skip_words(config, word, CONJUNCTIONS)) {
+		if (!skip_words(config, word, CONJUNCTIONS, -1)) {
 			fprintf(stderr, "You haven't specified action to be performed\n");
 			fclose(config); return -5;
 		}
@@ -212,7 +203,73 @@ int connect_to_keyboard(char *keyboard_path) {
 	return keyboard;
 }
 
+void *object(void *content, uint16_t size) {
+	void *object = malloc(size + 2);
+	*((uint16_t *) object) = size;
+	return memcpy(object + 2, content, size);
+}
+
+void delete(void *object) {
+	free(object - 2);
+}
+
+uint16_t object_size(void *object) {
+	return *((uint16_t *) (object - 2));
+}
+
+struct control *get_supported_controls(int periphery) {
+	int controls_count = 0;
+	struct control controls[256] = {};
+
+	unsigned char supported_buttons[(KEY_MAX + 7) / 8] = {};
+	ioctl(periphery, EVIOCGBIT(EV_KEY, KEY_MAX), supported_buttons);
+	for (int key = 0; key < 701; key++) {
+		if ((supported_buttons[key / 8] >> (key % 8)) & 1) {
+			struct control cntrl = {
+				.code = 61 + key, .value = 0,
+				.min_value = 0, .max_value = 1
+			};
+			controls[controls_count++] = cntrl;
+		}
+	}
+	unsigned char supported_axes[(ABS_MAX + 7) / 8] = {};
+	ioctl(periphery, EVIOCGBIT(EV_ABS, ABS_MAX), supported_axes);
+	for (int axis = 0; axis < 61; axis++)
+		if ((supported_axes[axis / 8] >> (axis % 8)) & 1) {
+			struct input_absinfo axis_info;
+			ioctl(periphery, EVIOCGABS(axis), &axis_info);
+			struct control cntrl = {
+				.code = axis, .value = axis_info.value,
+				.min_value = axis_info.minimum, .max_value = axis_info.maximum
+			};
+			controls[controls_count++] = cntrl;
+		}
+	return object(controls, controls_count * sizeof(struct control));
+}
+
 int main(int argc, char *argv[]) {
+	struct control gamepad_controls[19] = {
+		new_axis_control(ABS_X, 0, -128, 127), // left stick X
+		new_axis_control(ABS_Y, 0, -128, 127), // left stick Y
+		new_axis_control(ABS_Z, 0, -128, 127), // left trigger
+		new_axis_control(ABS_RX, 0, -128, 127), // right stick X
+		new_axis_control(ABS_RY, 0, -128, 127), // right stick Y
+		new_axis_control(ABS_RZ, 0, -128, 127), // right trigger
+		new_axis_control(ABS_HAT0X, 0, -128, 127), // directional pad X
+		new_axis_control(ABS_HAT0Y, 0, -128, 127), // directional pad Y
+		new_key_control(BTN_SOUTH), // button A
+		new_key_control(BTN_B), // button B
+		new_key_control(BTN_X), // button X
+		new_key_control(BTN_Y), // button Y
+		new_key_control(BTN_TL), // left bumper
+		new_key_control(BTN_TR), // right bumper
+		new_key_control(BTN_SELECT), // start button
+		new_key_control(BTN_START), // back button
+		new_key_control(BTN_MODE), // X360 button
+		new_key_control(BTN_THUMBL), // left stick
+		new_key_control(BTN_THUMBR), // right stick
+	};
+
 	if (argc != 2 || argv[1][0] != '/') {
 		printf(USAGE_MESSAGE, argv[0], argv[0]);
 		return 42;
@@ -220,20 +277,24 @@ int main(int argc, char *argv[]) {
 	char key_bindings[128] = "";
 	if (read_keys(key_bindings, "./keys.keys") < 0) return 42;
 	int keyboard_fd = connect_to_keyboard(argv[1]);
+	struct control *controls = get_supported_controls(keyboard_fd);
+	int controls_cnt = object_size(controls) / sizeof(struct control);
 	if (keyboard_fd < 0) {
 		perror("Failed to connect to the keyboard");
 		if (errno == 13)
 			printf("Have you tried something like this:\n"
 			       "  sudo %s %s\n", argv[0], argv[1]);
+		return 42;
 	}
 	int gamepad_fd = create_gamepad();
-	if (gamepad_fd < 0) printf("Failed to create gamepad\n");
-	if (keyboard_fd < 0 || gamepad_fd < 0) return 42;
+	if (gamepad_fd < 0) {
+		perror("Failed to create gamepad");
+		return 42;
+	}
 	printf("The keyboard has been successfully turned into a joystick.\n"
 	       "If you want to temporary turn it back, press DELETE on it.\n");
 	struct input_event event;
 	int balanse = 0, enabled = 1;
-	int controls[19] = {0};
 	while (read(keyboard_fd, &event, sizeof(event)) != -1) {
 		if (event.type != EV_KEY) continue;
 		if (event.code > 127 || event.value == 2) continue;
@@ -246,10 +307,13 @@ int main(int argc, char *argv[]) {
 		if (key_bindings[event.code] == 1) break;
 		struct action action = ACTIONS[key_bindings[event.code]];
 		printf("performed action: %s\n", action.name);
-		controls[action.control] += action.direction * (event.value * 2 - 1);
+		gamepad_controls[action.control].value
+			+= action.direction * (event.value * 2 - 1);
 		if (enabled)
-			sync_control(gamepad_fd, action.control, controls[action.control]);
+			sync_control(gamepad_fd, action.control,
+					gamepad_controls[action.control].value);
 	}
+	delete(controls);
 	close(keyboard_fd);
 	close(gamepad_fd);
 	return 0;
