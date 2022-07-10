@@ -1,6 +1,10 @@
 #ifndef CONTROLS_H
 #define CONTROLS_H
+#include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
+
+#include <stdio.h>
 
 
 int KEY_NAMES_CNT = 701;
@@ -145,6 +149,81 @@ struct control new_key_control(int code) {
 struct control new_axis_control(int code, int value, int min, int max) {
 	struct control cntrl = {code, value, min, max};
 	return cntrl;
+}
+
+int is_prefix(char *str, char *prefix) {
+	if (prefix == NULL || str == NULL) return false;
+	for (int i = 0; prefix[i]; i++)
+		if (str[i] != prefix[i])
+			return false;
+	return true;
+}
+
+int str_equals(char *s1, char *s2) {
+	if (s1 == s2) return true;
+	if (s1 == NULL || s2 == NULL) return false;
+	return strcmp(s1, s2) == 0;
+}
+
+int scan_key(char *src, size_t *offset) {
+	int old_offset = *offset;
+	int i = *offset;
+	char key_name[40] = "";
+	if (is_prefix(src + i, "button ")) {
+		strcpy(key_name, "btn_");
+		i += 7;
+	} else if (is_prefix(src + i, "key ")) {
+		i += 4;
+	} else {
+		return -1;
+	}
+	if (!src[i]) return -2;
+	int j = i;
+	while (src[i] && src[i] != ' ' && src[i] != '\t') i++;
+	strncat(key_name, src + j, i - j > 16 ? 16 : i - j);
+	for (char *ch = key_name; *ch != 0; ch++)
+		*ch += (*ch > 64 && *ch < 91) ? 32 : 0;
+	*offset = i;
+	for (int key = 0; key < KEY_NAMES_CNT; key++)
+		if (str_equals(key_name, KEY_NAMES[key]))
+			return key;
+	*offset = old_offset;
+	return -3;
+}
+
+int scan_axis(char *src, size_t *offset) {
+	if (!is_prefix(src + *offset, "axis ")) return -1;
+	int old_offset = *offset;
+	char axis_name[40] = "";
+	int i = *offset + 5, j = i;
+	if (!src[i]) return -2;
+	while (src[i] && src[i] != ' ' && src[i] != '\t') i++;
+	strncpy(axis_name, src + j, i - j > 16 ? 16 : i - j);
+	for (char *ch = axis_name; *ch != 0; ch++)
+		*ch += (*ch > 64 && *ch < 91) ? 32 : 0;
+	*offset = i;
+	for (int axis = 0; axis < AXES_CNT; axis++)
+		if (str_equals(axis_name, AXES_NAMES[axis]))
+			return axis;
+	*offset = old_offset;
+	return -3;
+}
+
+int scan_control(char *src, struct control *control) {
+	if (!is_prefix(src, "axis")) {
+		size_t i = 0;
+		int key = scan_key(src, &i);
+		if (key < 0) return -1;
+		struct control cntrl = new_key_control(key);
+		*control = cntrl;
+		return i;
+	}
+	size_t i = 0;
+	int axis = scan_axis(src, &i);
+	if (axis < 0) return -1;
+	struct control cntrl = new_axis_control(axis, 128, 0, 255);
+	*control = cntrl;
+	return i;
 }
 
 #endif
