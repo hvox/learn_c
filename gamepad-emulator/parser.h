@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "controls.h"
-#include "dynamic_array.h"
+#include "../dynamic_array.h"
 
 struct device_id {
 	char name[80];
