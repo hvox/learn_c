@@ -232,6 +232,12 @@ int scan_control(char *src, struct control *control) {
 	int axis = scan_axis(src, &i);
 	if (axis < 0) return -1;
 	struct control cntrl = new_axis_control(axis, 0, -128, 127);
+	while (src[i] == ' ' || src[i] == '\t') i++;
+	if (src[i] == '[') {
+		sscanf(src + i + 1, "%d,%d,%d",
+			&cntrl.value, &cntrl.min_value, &cntrl.max_value);
+		while (src[i] && src[i - 1] != ']') i++;
+	}
 	*control = cntrl;
 	return i;
 }
