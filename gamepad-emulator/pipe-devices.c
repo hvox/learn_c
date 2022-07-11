@@ -10,7 +10,7 @@
 int is_infix(const char *str, const char *infix) {
 	if (str == NULL || infix == NULL) return 0;
 	for (int i = 0; str[i]; i++)
-		if (!strcmp(str + i, infix))
+		if (!strncmp(str + i, infix, strlen(infix)))
 			return strlen(infix) - strlen(str) + 0x7fffffff;
 	return 0;
 }
@@ -174,16 +174,6 @@ void sync_control(int fd, const struct control *control) {
 
 int pipe_devices(struct device_configuration *src,
                  struct device_configuration *dest) {
-	int src_fd = connect_to_device(src->id.name);
-	if (src_fd < 0) {
-		fprintf(stderr, "Failed to connect to \"%s\"\n", src->id.name);
-		return -1;
-	}
-	else {
-		char name[UINPUT_MAX_NAME_SIZE] = "ANONYMOUS DEVICE";
-		ioctl(src_fd, EVIOCGNAME(UINPUT_MAX_NAME_SIZE), name);
-		printf("Successfully connected to \"%s\"\n", name);
-	}
 	//int dest_fd = create_gamepad();
 	int dest_fd = create_device(dest);
 	if (dest_fd < 0) {
@@ -194,6 +184,17 @@ int pipe_devices(struct device_configuration *src,
 		printf("Successfully created %04x:%04x %s\n",
 			dest->id.vendor_id, dest->id.product_id, dest->id.name);
 	}
+	int src_fd;
+	while ((src_fd = connect_to_device(src->id.name)) < 0) {
+		fprintf(stderr, "Failed to connect to \"%s\"\n", src->id.name);
+		fprintf(stderr, "I will try again in a few seconds\n");
+		sleep(2);
+	}
+	char name[UINPUT_MAX_NAME_SIZE] = "ANONYMOUS DEVICE";
+	ioctl(src_fd, EVIOCGNAME(UINPUT_MAX_NAME_SIZE), name);
+	printf("Successfully connected to \"%s\"\n", name);
+	if (ioctl(src_fd, EVIOCGRAB, 1) < 0)
+		perror(NULL);
 
 	struct input_event event;
 	while (read(src_fd, &event, sizeof(event)) != -1) {

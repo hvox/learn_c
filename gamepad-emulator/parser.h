@@ -41,7 +41,7 @@ struct device_id scan_device_id(char *src) {
 	id.vendor_id = scan_uint(src + 1, 4);
 	id.product_id = scan_uint(src + 6, 4);
 	size_t name_len = strlen(src + 11) > 79 ? 79 : strlen(src + 11);
-	strncpy(id.name, src + 11, name_len);
+	strncpy(id.name, src + 11, name_len + 1);
 	return id;
 }
 

@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "controls.h"
+#include "../dynamic_array.h"
 
 char *USAGE_MESSAGE =
   "usage: %s <periphery event file>\n\n"
@@ -26,13 +27,13 @@ uint16_t object_size(void *object) {
 	return *((uint16_t *) (object - 2));
 }
 
-void print_control(struct control cntrl) {
+void print_control_description(struct control cntrl) {
 	int code = cntrl.code;
 	if (code > 61)
-		printf("%s = %d\n", KEY_NAMES[code - 61], cntrl.value);
+		printf("%s\n", KEY_NAMES[code - 61]);
 	else
-		printf("%s : [%d..%d] = %d\n", AXES_NAMES[code],
-			cntrl.min_value, cntrl.max_value, cntrl.value);
+		printf("%s [%d, %d, %d]\n", AXES_NAMES[code],
+			cntrl.value, cntrl.min_value, cntrl.max_value);
 }
 
 struct control *get_supported_controls(int periphery) {
@@ -68,10 +69,18 @@ struct control *get_supported_controls(int periphery) {
 int print_periphery(char *periphery_path) {
 	int periphery = open(periphery_path, O_RDONLY);
 	if (periphery == -1) return -1;
+	char name[UINPUT_MAX_NAME_SIZE] = "ANONIMIOUS DEVICE";
+	if (ioctl(periphery, EVIOCGNAME(UINPUT_MAX_NAME_SIZE), name) < 0)
+		perror(periphery_path);
+	uint16_t id[4];
+	if (ioctl(periphery, EVIOCGID, id) < 0)
+		perror(periphery_path);
+	printf(":%04X:%04X %s\n", id[1], id[2], name);
 	struct control *controls = get_supported_controls(periphery);
 	int controls_count = object_size(controls) / sizeof(struct control);
 	for (int i = 0; i < controls_count; i++)
-		print_control(controls[i]);
+		print_control_description(controls[i]);
+	//del_array(controls);
 	close(periphery);
 	return 0;
 }

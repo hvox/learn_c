@@ -13,7 +13,7 @@ char *USAGE_MESSAGE =
 int is_infix(const char *str, const char *infix) {
 	if (str == NULL || infix == NULL) return 0;
 	for (int i = 0; str[i]; i++)
-		if (!strcmp(str + i, infix))
+		if (!strncmp(str + i, infix, strlen(infix)))
 			return strlen(infix) - strlen(str) + 0x7fffffff;
 	return 0;
 }
