@@ -144,7 +144,6 @@ struct control new_key_control(int code) {
 	struct control cntrl = {code + AXES_CNT, 0, 0, 1};
 	return cntrl;
 }
-#define NEW_AXIS(code, min, max) {code, 0, min, max}
 
 struct control new_axis_control(int code, int value, int min, int max) {
 	struct control cntrl = {code, value, min, max};
