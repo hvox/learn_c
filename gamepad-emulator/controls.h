@@ -149,6 +149,18 @@ struct control new_axis_control(int code, int value, int min, int max) {
 	return cntrl;
 }
 
+int control_as_key(struct control cntrl) {
+	if (cntrl.code >= AXES_CNT)
+		return cntrl.code - AXES_CNT;
+	return -1;
+}
+
+int control_as_axis(struct control cntrl) {
+	if (cntrl.code < AXES_CNT)
+		return cntrl.code;
+	return -1;
+}
+
 int is_prefix(const char *str, const char *prefix) {
 	if (prefix == NULL || str == NULL) return false;
 	for (int i = 0; prefix[i]; i++)
@@ -219,7 +231,7 @@ int scan_control(char *src, struct control *control) {
 	size_t i = 0;
 	int axis = scan_axis(src, &i);
 	if (axis < 0) return -1;
-	struct control cntrl = new_axis_control(axis, 128, 0, 255);
+	struct control cntrl = new_axis_control(axis, 0, -128, 127);
 	*control = cntrl;
 	return i;
 }

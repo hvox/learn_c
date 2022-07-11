@@ -110,4 +110,14 @@ int bindings_find_control(struct binding *bindings, size_t length, int cntrl) {
 	return -1;
 }
 
+struct control *find_control_by_action(struct device_configuration *dev,
+		char *target_action) {
+	struct binding *bindings = dev->bindings;
+	int length = len(bindings);
+	for (int i = 0; i < length; i++)
+		if (str_equals(dev->actions[bindings[i].action], target_action))
+			return &(dev->controls[bindings[i].control]);
+	return NULL;
+}
+
 #endif
