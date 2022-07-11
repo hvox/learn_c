@@ -48,15 +48,15 @@ struct device_id scan_device_id(char *src) {
 size_t scan_direction(char *src, int8_t *direction) {
 	if (is_prefix(src, "positive ")) {
 		*direction = 1;
-		return sizeof("positive ");
+		return sizeof("positive");
 	}
 	if (is_prefix(src, "negative ")) {
 		*direction = -1;
-		return sizeof("negative ");
+		return sizeof("negative");
 	}
 	if (is_prefix(src, "inversed ")) {
 		*direction = -2;
-		return sizeof("inversed ");
+		return sizeof("inversed");
 	}
 	*direction = 2;
 	return 0;
@@ -84,7 +84,7 @@ struct device_configuration *read_device_configuration(char *path) {
 		struct control cntrl;
 		line += scan_control(line, &cntrl);
 		while (*line == ' ' || *line == '\t') line++;
-		if (*line != '-') return NULL;
+		if (*(line++) != '-') return NULL;
 		while (*line == ' ' || *line == '\t') line++;
 		int8_t direction;
 		line += scan_direction(line, &direction);
@@ -101,6 +101,13 @@ struct device_configuration *read_device_configuration(char *path) {
 	struct device_configuration device = {id, actions, controls, bindings};
 	*device_ptr = device;
 	return device_ptr;
+}
+
+int bindings_find_control(struct binding *bindings, size_t length, int cntrl) {
+	for (int i = 0; i < length; i++)
+		if (bindings[i].control == cntrl)
+			return i;
+	return -1;
 }
 
 #endif

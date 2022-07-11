@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-
 #include <stdio.h>
 
 
@@ -150,7 +149,7 @@ struct control new_axis_control(int code, int value, int min, int max) {
 	return cntrl;
 }
 
-int is_prefix(char *str, char *prefix) {
+int is_prefix(const char *str, const char *prefix) {
 	if (prefix == NULL || str == NULL) return false;
 	for (int i = 0; prefix[i]; i++)
 		if (str[i] != prefix[i])
@@ -223,6 +222,27 @@ int scan_control(char *src, struct control *control) {
 	struct control cntrl = new_axis_control(axis, 128, 0, 255);
 	*control = cntrl;
 	return i;
+}
+
+int controls_find_code(struct control *controls, size_t length, int code) {
+	for (int i = 0; i < length; i++)
+		if (controls[i].code == code)
+			return i;
+	return -1;
+}
+
+int controls_find_key(struct control *controls, size_t length, int key) {
+	return controls_find_code(controls, length, key + AXES_CNT);
+}
+
+int controls_find_axis(struct control *controls, size_t length, int axis) {
+	return controls_find_code(controls, length, axis);
+}
+
+int print_control(FILE *fd, struct control cntrl) {
+	if (cntrl.code < AXES_CNT)
+		return fprintf(fd, "axis %s", AXES_NAMES[cntrl.code]);
+	return fprintf(fd, "key %s", KEY_NAMES[cntrl.code - AXES_CNT]);
 }
 
 #endif
