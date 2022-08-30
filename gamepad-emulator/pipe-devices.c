@@ -196,6 +196,7 @@ int pipe_devices(struct device_configuration *src,
 	if (ioctl(src_fd, EVIOCGRAB, 1) < 0)
 		perror(NULL);
 
+	int enabled = 1;
 	struct input_event event;
 	while (read(src_fd, &event, sizeof(event)) != -1) {
 		if (event.type != EV_KEY && event.type != EV_ABS) continue;
@@ -203,6 +204,8 @@ int pipe_devices(struct device_configuration *src,
 			if (event.code == KEY_DELETE) break;
 			else continue;
 		}
+		if (event.type == EV_KEY && event.code == KEY_DELETE && event.value == 0)
+			ioctl(src_fd, EVIOCGRAB, enabled = !enabled);
 		struct control *controls = src->controls;
 		int i = (event.type == EV_KEY)
 			? controls_find_key(controls, len(controls), event.code)
@@ -240,8 +243,15 @@ int pipe_devices(struct device_configuration *src,
 }
 
 int main(int argc, char *argv[]) {
-	return pipe_devices(
-		read_device_configuration(argv[1]),
-		read_device_configuration(argv[2])
-	);
+	struct device_configuration *src = read_device_configuration(argv[1]);
+	if (src == NULL) {
+		fprintf(stderr, "Failed to read source device configuration\n");
+		return -1;
+	}
+	struct device_configuration *dst = read_device_configuration(argv[2]);
+	if (dst == NULL) {
+		fprintf(stderr, "Failed to read target device configuration\n");
+		return -2;
+	}
+	return pipe_devices(src, dst);
 }
