@@ -22,8 +22,11 @@ int connect_to_periphery(char *periphery_path) {
 	int periphery = open(periphery_path, O_RDONLY);
 	if (periphery == -1) return -1;
 	struct control controls[256] = {};
-	if (ioctl(periphery, EVIOCGRAB, 1) < 0)
-		printf("Failed to block other programs from reading periphery events");
+	if (ioctl(periphery, EVIOCGRAB, 1) < 0) {
+		printf("Failed to block other programs from reading periphery events\n");
+		close(periphery);
+		return -1;
+	}
 	return periphery;
 }
 
@@ -54,7 +57,7 @@ int create_device() {
 void process_event(int fd, struct input_event event) {
 	if (event.type == EV_KEY) {
 		if (event.code > 700 || event.value == 2) return;
-		int code = FUNCTION_KEYS[7 + event.code - KEY_1];
+		int code = FUNCTION_KEYS[7 + event.code - KEY_1 - 1];
 		struct input_event ev = {.type=EV_KEY, .code=code, .value=event.value};
 		struct input_event flush = {.type=EV_SYN, .code=SYN_REPORT, .value=0};
 		if (write(fd, &ev, sizeof(ev)) < 0 || (write(fd, &flush, sizeof(flush)) < 0))
@@ -70,6 +73,7 @@ void process_event(int fd, struct input_event event) {
 }
 
 int main(int argc, char *argv[]) {
+	setvbuf(stdout, NULL, _IONBF, 0);
 	if (argc != 2 || argv[1][0] != '/') {
 		printf(USAGE_MESSAGE, argv[0], argv[0]);
 		return 42;
@@ -97,6 +101,8 @@ int main(int argc, char *argv[]) {
 			ioctl(periphery_fd, EVIOCGRAB, enabled = !enabled);
 		process_event(fake_mouse_device, event);
 	}
+	printf("Bye...\n");
 	close(periphery_fd);
+	close(fake_mouse_device);
 	return 0;
 }
